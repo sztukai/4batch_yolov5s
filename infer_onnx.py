@@ -230,8 +230,8 @@ def merge_and_nms(boxes, iou_thresh=0.5, h_iou=0.5):
                 box2 = nmsed_boxes[new_index[j]]
                 x1 = max(box1[0], box2[0], 0)
                 y1 = max(box1[1], box2[1], 0)
-                x2 = min(box1[2], box2[2], 0)
-                y2 = min(box1[3], box2[3], 0)
+                x2 = min(box1[2], box2[2], )
+                y2 = min(box1[3], box2[3], )
                 w = max(0, x2 - x1)
                 h = max(0, y2 - y1)
                 inter = w * h
@@ -446,7 +446,9 @@ if __name__ == "__main__":
         outputs = np.concatenate(output_arr)
         print('outputs:', outputs.shape)
         if batch_size != 1:
+            outputs = NMS_2(outputs, nms_thresh, h_iou)
             outputs = merge_and_nms(outputs, nms_thresh, h_iou)
+
             print('outputs:', outputs.shape)
 
         for result in outputs:
