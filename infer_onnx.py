@@ -219,55 +219,12 @@ def merge_and_nms(boxes, iou_thresh=0.5, h_iou=0.5):
 
     keep_boxes = []
     for cls, nmsed_boxes in grouped.items():
-
-        new_index = np.argsort(nmsed_boxes[:, 4])[::-1]
-        Len = nmsed_boxes.shape[0]
-
-        for i in range(Len):
-            box1 = nmsed_boxes[new_index[i]]
-            j = i + 1
-            while j < Len:
-                box2 = nmsed_boxes[new_index[j]]
-                x1 = max(box1[0], box2[0], 0)
-                y1 = max(box1[1], box2[1], 0)
-                x2 = min(box1[2], box2[2], )
-                y2 = min(box1[3], box2[3], )
-                w = max(0, x2 - x1)
-                h = max(0, y2 - y1)
-                inter = w * h
-
-                Iou = inter / ((box1[2] - box1[0]) * (box1[3] - box1[1]) + (box2[2] - box2[0]) * (box2[3] - box2[1]) - inter)
-                Iou1 = max(h / (box1[3] - box1[1]), h / (box2[3] - box2[1]))
-
-                
-                # 如果有交集，并且 H 方向的交并比大于iou_threash, 合并框
-                if Iou > 0 and Iou1 > h_iou:
-                    # 置信度大的框变为合并后的框
-
-                    nmsed_boxes[i][0] = min(box1[0], box2[0])
-                    nmsed_boxes[i][1] = min(box1[1], box2[1])
-                    nmsed_boxes[i][2] = max(box1[2], box2[2])
-                    nmsed_boxes[i][3] = max(box1[3], box2[3])
-
-                    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
-                    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
-
-                    # 根据面积占比获取新的置信度
-                    nmsed_boxes[i][4] = (area1 * box1[4] + area2 * box2[4]) / (area1 + area2)
-
-                    # 置信度小的框设置为非法框
-                    nmsed_boxes[j][0] = nmsed_boxes[j][1] = nmsed_boxes[j][2] = nmsed_boxes[j][3] = -100
-
-                j += 1
-
-        # Filter out invalid boxes (marked with -100)
-        nmsed_boxes = nmsed_boxes[nmsed_boxes[:, 0] > 0]
-
-        # Non-Maximum Suppression (NMS)
+        #   NMS_2
         index = np.argsort(nmsed_boxes[:, 4])[::-1]  # Sort by score
+        temp_list = []
         while index.size > 0:
             i = index[0]
-            keep_boxes.append(nmsed_boxes[i])
+            temp_list.append(nmsed_boxes[i])
 
             # Calculate IoU between the current box and the remaining ones
             x1 = np.maximum(nmsed_boxes[i, 0], nmsed_boxes[index[1:], 0])
@@ -294,6 +251,50 @@ def merge_and_nms(boxes, iou_thresh=0.5, h_iou=0.5):
 
             idx = np.where(condition1 & condition2 & condition3)[0]
             index = index[idx + 1]  # Update index
+
+        # merge and remove
+        nmsed_boxes = np.array(temp_list)
+        new_index = np.argsort(nmsed_boxes[:, 4])[::-1]
+        Len = nmsed_boxes.shape[0]
+
+        for i in range(Len):
+            box1 = nmsed_boxes[new_index[i]]
+            j = i + 1
+            while j < Len:
+                box2 = nmsed_boxes[new_index[j]]
+                x1 = max(box1[0], box2[0], 0)
+                y1 = max(box1[1], box2[1], 0)
+                x2 = min(box1[2], box2[2], )
+                y2 = min(box1[3], box2[3], )
+                w = max(0, x2 - x1)
+                h = max(0, y2 - y1)
+                inter = w * h
+
+                Iou = inter / ((box1[2] - box1[0]) * (box1[3] - box1[1]) + (box2[2] - box2[0]) * (box2[3] - box2[1]) - inter)
+                Iou1 = max(h / (box1[3] - box1[1]), h / (box2[3] - box2[1]))
+
+                
+                # 如果有交集，并且 H 方向的交并比大于iou_threash, 合并框
+                if Iou > 0 and Iou1 > h_iou:
+                    nmsed_boxes[i][0] = min(box1[0], box2[0])
+                    nmsed_boxes[i][1] = min(box1[1], box2[1])
+                    nmsed_boxes[i][2] = max(box1[2], box2[2])
+                    nmsed_boxes[i][3] = max(box1[3], box2[3])
+
+                    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+                    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+
+                    # 根据面积占比获取新的置信度
+                    nmsed_boxes[i][4] = (area1 * box1[4] + area2 * box2[4]) / (area1 + area2)
+
+                    # 置信度小的框设置为非法框
+                    nmsed_boxes[j][0] = nmsed_boxes[j][1] = nmsed_boxes[j][2] = nmsed_boxes[j][3] = -100
+
+                j += 1
+
+        nmsed_boxes = nmsed_boxes[nmsed_boxes[:, 0] > 0]
+
+        keep_boxes.extend(nmsed_boxes)
 
     return np.array(keep_boxes)
 
@@ -446,11 +447,10 @@ if __name__ == "__main__":
         outputs = np.concatenate(output_arr)
         print('outputs:', outputs.shape)
         if batch_size != 1:
-            outputs = NMS_2(outputs, nms_thresh, h_iou)
             outputs = merge_and_nms(outputs, nms_thresh, h_iou)
 
             print('outputs:', outputs.shape)
-
+        ori_img = IMG
         for result in outputs:
             score = result[4]
             result = [int(i) for i in result]
